@@ -38,25 +38,39 @@ export default function DashboardScreen() {
                 <Text style={styles.statValue}>{(profile.totalDistanceMeters / 1000).toFixed(2)} km</Text>
             </View>
 
-            {/* Map Card */}
             {latestActivity && latestActivity.routeData && latestActivity.routeData.length > 0 && (
                 <View style={styles.mapCard}>
                     <Text style={styles.statTitle}>Latest Run: {(latestActivity.distanceMeters / 1000).toFixed(2)} km</Text>
-                    <MapView
-                        style={styles.map}
-                        initialRegion={{
-                            latitude: latestActivity.routeData[0].lat,
-                            longitude: latestActivity.routeData[0].lng,
-                            latitudeDelta: 0.015,
-                            longitudeDelta: 0.015,
-                        }}
-                    >
-                        <Polyline
-                            coordinates={latestActivity.routeData.map(point => ({ latitude: point.lat, longitude: point.lng }))}
-                            strokeColor="#fc4c02"
-                            strokeWidth={4}
-                        />
-                    </MapView>
+
+                    {/* Only render Map if we have VALID first coordinates */}
+                    {Number(latestActivity.routeData[0].lat) && Number(latestActivity.routeData[0].lng) ? (
+                        <MapView
+                            style={styles.map}
+                            initialRegion={{
+                                latitude: Number(latestActivity.routeData[0].lat),
+                                longitude: Number(latestActivity.routeData[0].lng),
+                                latitudeDelta: 0.015,
+                                longitudeDelta: 0.015,
+                            }}
+                        >
+                            <Polyline
+                                // Safely map and filter out ANY invalid database points
+                                coordinates={latestActivity.routeData
+                                    .map(point => ({
+                                        latitude: Number(point.lat),
+                                        longitude: Number(point.lng)
+                                    }))
+                                    .filter(point => !isNaN(point.latitude) && !isNaN(point.longitude))
+                                }
+                                strokeColor="#fc4c02"
+                                strokeWidth={4}
+                            />
+                        </MapView>
+                    ) : (
+                        <View style={[styles.map, { backgroundColor: '#e9ecef', justifyContent: 'center', alignItems: 'center' }]}>
+                            <Text style={{ color: '#6d6d78' }}>Invalid GPS Data in Database</Text>
+                        </View>
+                    )}
                 </View>
             )}
 
@@ -74,7 +88,8 @@ const styles = StyleSheet.create({
     statTitle: { fontSize: 14, color: '#666', textTransform: 'uppercase' },
     statValue: { fontSize: 24, fontWeight: 'bold', color: '#fc4c02', marginTop: 5 },
     mapCard: { backgroundColor: '#fff', borderRadius: 10, marginBottom: 15, overflow: 'hidden', elevation: 3, padding: 15 },
-    map: { width: '100%', height: 200, marginTop: 10 },
+    // map: { width: '100%', height: 200, marginTop: 10 },
+    map: { alignSelf: 'stretch', height: 200, marginTop: 10 },
     logoutButton: { backgroundColor: '#333', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 30 },
     buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
 });

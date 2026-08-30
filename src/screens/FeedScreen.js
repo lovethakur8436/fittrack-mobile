@@ -280,8 +280,10 @@ const styles = StyleSheet.create({
     metricUnit: { fontSize: 12, fontWeight: '500', color: '#94a3b8' },
 
     // Media
-    mediaContainer: { width: '100%', height: 240, position: 'relative' },
-    mapImage: { width: '100%', height: '100%' },
+    // mediaContainer: { width: '100%', height: 240, position: 'relative' },
+    mediaContainer: { alignSelf: 'stretch', height: 240, position: 'relative' },
+    // mapImage: { width: '100%', height: '100%' },
+    mapImage: { flex: 1 },
     overlayPhotoLeft: { position: 'absolute', bottom: -15, left: 15, width: 80, height: 80, borderRadius: 12, borderWidth: 3, borderColor: '#1e293b' },
     overlayPhotoRight: { position: 'absolute', bottom: -15, right: 15, width: 80, height: 80, borderRadius: 12, borderWidth: 3, borderColor: '#1e293b' },
 
@@ -291,7 +293,8 @@ const styles = StyleSheet.create({
 
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-    modalContent: { width: '85%', backgroundColor: '#1e293b', padding: 25, borderRadius: 16, borderWidth: 1, borderColor: '#334155' },
+    // modalContent: { width: '85%', backgroundColor: '#1e293b', padding: 25, borderRadius: 16, borderWidth: 1, borderColor: '#334155' },
+    modalContent: { alignSelf: 'center', minWidth: 320, backgroundColor: '#1e293b', padding: 25, borderRadius: 16, borderWidth: 1, borderColor: '#334155' },
     modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#f8fafc', marginBottom: 20 },
     input: { borderBottomWidth: 1, borderColor: '#fc4c02', fontSize: 16, paddingVertical: 10, color: '#f8fafc', marginBottom: 10 },
 });
