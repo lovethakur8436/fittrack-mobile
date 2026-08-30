@@ -1,5 +1,5 @@
 // src/services/api.js
-const API_BASE_URL = 'http://192.168.0.4:8080'; // <-- Insert your IP here
+const API_BASE_URL = 'http://10.183.195.176:8080'; // <-- Insert your IP here
 
 export const ApiService = {
     login: async (email, password) => {
@@ -28,5 +28,48 @@ export const ApiService = {
         const data = await res.json();
         console.log("Activities fetched from API:", data);
         return data;
+    },
+
+    // Add these below your getActivities method
+    updateActivity: async (token, id, data) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/activities/${id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status} - ${errorText}`);
+            }
+            return await response.json();
+        } catch (error) {
+            throw new Error(error.message || "Network request failed");
+        }
+    },
+
+    deleteActivity: async (token, id) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/activities/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                // Edge Case: If the backend says 404, it's already deleted. Treat as success.
+                if (response.status === 404) return true;
+
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status} - ${errorText}`);
+            }
+            return true;
+        } catch (error) {
+            throw new Error(error.message || "Network request failed");
+        }
     }
 };
