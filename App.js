@@ -3,6 +3,7 @@ import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import FeedScreen from './src/screens/FeedScreen';
+import TrackingScreen from './src/screens/TrackingScreen';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
@@ -26,10 +27,9 @@ const MainTabs = () => {
         options={{ tabBarIcon: () => <Text style={{ fontSize: 20 }}>🏠</Text> }}
       />
 
-      {/* Placeholder for the live GPS tracker */}
       <Tab.Screen
         name="Record"
-        component={FeedScreen} // Temporarily pointing to Feed until we build Tracking
+        component={TrackingScreen}
         options={{ tabBarIcon: () => <Text style={{ fontSize: 20 }}>🔴</Text> }}
       />
 
@@ -38,6 +38,8 @@ const MainTabs = () => {
         component={DashboardScreen}
         options={{ tabBarIcon: () => <Text style={{ fontSize: 20 }}>👤</Text> }}
       />
+
+
     </Tab.Navigator>
   );
 };

@@ -1,5 +1,5 @@
 // src/services/api.js
-const API_BASE_URL = 'http://192.168.0.5:8080'; // <-- Insert your IP here
+const API_BASE_URL = 'http://192.168.0.6:8080'; // <-- Insert your IP here
 
 export const ApiService = {
     login: async (email, password) => {
@@ -71,5 +71,25 @@ export const ApiService = {
         } catch (error) {
             throw new Error(error.message || "Network request failed");
         }
-    }
+    },
+
+    createActivity: async (token, activityData) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/activities`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(activityData),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status} - ${errorText}`);
+            }
+            return await response.json();
+        } catch (error) {
+            throw new Error(error.message || "Network request failed");
+        }
+    },
 };
