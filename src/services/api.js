@@ -16,6 +16,10 @@ export const ApiService = {
         const res = await fetch(`${API_BASE_URL}/api/v1/profiles/me`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`HTTP ${res.status} - ${errorText}`);
+        }
         return res.json();
     },
 
@@ -23,11 +27,11 @@ export const ApiService = {
         const res = await fetch(`${API_BASE_URL}/api/v1/activities`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-
-        // Let's add a console.log here to debug why the map failed earlier!
-        const data = await res.json();
-        console.log("Activities fetched from API:", data);
-        return data;
+        if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`HTTP ${res.status} - ${errorText}`);
+        }
+        return res.json();
     },
 
     // Add these below your getActivities method

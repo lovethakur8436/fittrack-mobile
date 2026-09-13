@@ -1,30 +1,36 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useState, useCallback } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import MapView, { Polyline } from 'react-native-maps';
+import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 import { ApiService } from '../services/api';
 
 export default function DashboardScreen() {
     // 1. Open the vault to get the current user data
-    const { profile, token, logout } = useContext(AuthContext);
+    const { profile, token, logout, refreshProfile } = useContext(AuthContext);
     const [latestActivity, setLatestActivity] = useState(null);
 
-    // 2. @PostConstruct equivalent - fetch the activities when the screen loads
-    useEffect(() => {
-        const fetchActivities = async () => {
-            try {
-                const data = await ApiService.getActivities(token);
+    // 2. Re-fetch data every time this tab is focused (not just on mount)
+    useFocusEffect(
+        useCallback(() => {
+            refreshProfile();
+            const fetchActivities = async () => {
+                try {
+                    const data = await ApiService.getActivities(token);
 
-                // Notice the change here: we drill into data.content
-                if (data && data.content && data.content.length > 0) {
-                    setLatestActivity(data.content[0]);
+                    // Notice the change here: we drill into data.content
+                    if (data && data.content && data.content.length > 0) {
+                        setLatestActivity(data.content[0]);
+                    } else {
+                        setLatestActivity(null);
+                    }
+                } catch (error) {
+                    console.error("Dashboard error:", error);
                 }
-            } catch (error) {
-                console.error("Dashboard error:", error);
-            }
-        };
-        fetchActivities();
-    }, [token]); // The array tells React: only run this again if the token changes
+            };
+            fetchActivities();
+        }, [token, refreshProfile])
+    );
 
     // Safety check: if profile hasn't loaded yet from context
     if (!profile) return <View style={styles.container}><Text>Loading profile...</Text></View>;
@@ -35,7 +41,7 @@ export default function DashboardScreen() {
 
             <View style={styles.card}>
                 <Text style={styles.statTitle}>Total Distance</Text>
-                <Text style={styles.statValue}>{(profile.totalDistanceMeters / 1000).toFixed(2)} km</Text>
+                <Text style={styles.statValue}>{((profile.totalDistanceMeters || 0) / 1000).toFixed(2)} km</Text>
             </View>
 
             {latestActivity && latestActivity.routeData && latestActivity.routeData.length > 0 && (

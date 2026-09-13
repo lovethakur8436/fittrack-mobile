@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useContext, useCallback } from 'react';
 import { StyleSheet, Text, View, FlatList, Image, ActivityIndicator, Modal, Alert, TextInput, TouchableOpacity, Button, Platform } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import { ApiService } from '../services/api';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function FeedScreen() {
-    const { token } = useContext(AuthContext);
+    const { token, refreshProfile } = useContext(AuthContext);
     const [activities, setActivities] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -13,9 +14,11 @@ export default function FeedScreen() {
     const [processingId, setProcessingId] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
 
-    useEffect(() => {
-        fetchFeed();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            fetchFeed();
+        }, [token])
+    );
 
     const fetchFeed = async () => {
         try {
@@ -44,6 +47,7 @@ export default function FeedScreen() {
                         try {
                             await ApiService.deleteActivity(token, id);
                             setActivities(prev => prev.filter(a => a.id !== id));
+                            refreshProfile(); // Update total distance on Dashboard
                         } catch (error) {
                             Alert.alert("Deletion Failed", `Reason: ${error.message}`);
                         } finally {
