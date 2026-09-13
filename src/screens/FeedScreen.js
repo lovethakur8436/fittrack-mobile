@@ -72,7 +72,7 @@ export default function FeedScreen() {
     const fixImageUri = (url) => {
         if (!url) return null;
         if (Platform.OS === 'android' && url.includes('localhost')) {
-            return url.replace('localhost', '192.168.0.5');
+            return url.replace('localhost', '10.0.2.2');
         }
         return url;
     };
@@ -170,11 +170,22 @@ export default function FeedScreen() {
 
                 {/* Media Area (Overlapping Map & Photos) */}
                 <View style={styles.mediaContainer}>
-                    {item.mapImageUrl ? (
-                        <Image source={{ uri: fixImageUri(item.mapImageUrl) }} style={styles.mapImage} resizeMode="cover" />
+                    {(item.mapImageUrl || item.map_image_url) ? (
+                        <Image 
+                            source={{ uri: fixImageUri(item.mapImageUrl || item.map_image_url) }} 
+                            style={styles.mapImage} 
+                            resizeMode="cover" 
+                        />
+                    ) : (item.routeData && item.routeData.length > 0) || (item.route_data && item.route_data.length > 0) ? (
+                        // The activity has GPS data, but no image yet -> RabbitMQ is processing
+                        <View style={[styles.mapImage, { backgroundColor: '#1e293b', justifyContent: 'center', alignItems: 'center' }]}>
+                            <ActivityIndicator size="large" color="#fc4c02" />
+                            <Text style={{ color: '#94a3b8', marginTop: 10, fontWeight: '600' }}>Processing Map...</Text>
+                        </View>
                     ) : (
-                        <View style={[styles.mapImage, { backgroundColor: '#1a242f', justifyContent: 'center', alignItems: 'center' }]}>
-                            <Text style={{ color: '#4b5563' }}>GPS Data Unavailable</Text>
+                        // The activity was manually logged without any GPS data
+                        <View style={[styles.mapImage, { backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center' }]}>
+                            <Text style={{ color: '#4b5563' }}>No GPS Data</Text>
                         </View>
                     )}
 

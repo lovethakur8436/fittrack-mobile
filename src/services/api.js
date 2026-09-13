@@ -1,5 +1,5 @@
 // src/services/api.js
-const API_BASE_URL = 'http://192.168.0.5:8080'; // <-- Insert your IP here
+const API_BASE_URL = 'http://10.190.0.3:8080'; // <-- Insert your IP here
 
 export const ApiService = {
     login: async (email, password) => {

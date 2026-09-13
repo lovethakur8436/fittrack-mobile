@@ -4,6 +4,8 @@ import MapView, { Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { AuthContext } from '../context/AuthContext';
 import { ApiService } from '../services/api';
+import { useNavigation } from '@react-navigation/native';
+
 
 export default function TrackingScreen({ navigation }) {
     const { token } = useContext(AuthContext);
@@ -25,20 +27,45 @@ export default function TrackingScreen({ navigation }) {
     const lastPointRef = useRef(null); // Used for accurate distance math
     const durationRef = useRef(0);
 
+
     // 1. Initial Setup: Request permissions and get starting location
+
+
     useEffect(() => {
+        let isMounted = true;
+
         (async () => {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permission denied', 'Allow location access to record activities.');
-                return;
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') {
+                    if (isMounted) Alert.alert('Permission Denied', 'Allow location access to record activities.');
+                    return;
+                }
+
+                // Production-standard request
+                const location = await Location.getCurrentPositionAsync({ 
+                    accuracy: Location.Accuracy.Balanced
+                });
+                
+                if (isMounted) {
+                    setCurrentLocation(location.coords);
+                }
+
+            } catch (error) {
+                // Proper UI error handling, no hidden fallbacks
+                if (isMounted) {
+                    Alert.alert(
+                        "GPS Signal Lost", 
+                        "Could not acquire your current location. Please ensure your GPS is on and try again."
+                    );
+                }
             }
-            const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            setCurrentLocation(location.coords);
         })();
 
-        // Cleanup on unmount
-        return () => stopTracking();
+        return () => {
+            isMounted = false;
+            stopTracking(); 
+        };
     }, []);
 
     // 2. Haversine Formula (Calculates distance between two GPS coordinates)
@@ -141,7 +168,23 @@ export default function TrackingScreen({ navigation }) {
         try {
             await ApiService.createActivity(token, payload);
             Alert.alert("Success", "Activity saved!", [
-                { text: "OK", onPress: () => navigation.navigate('Feed') }
+                { 
+                    text: "OK", 
+                    onPress: () => {
+                        // 1. Wipe all local state
+                        setDurationSeconds(0);
+                        setDistanceMeters(0);
+                        setRoutePoints([]);
+                        setStartTime(null);
+                        
+                        // 2. Reset the background refs
+                        durationRef.current = 0;
+                        lastPointRef.current = null;
+                        
+                        // 3. Navigate away
+                        navigation.navigate('Feed');
+                    } 
+                }
             ]);
         } catch (error) {
             Alert.alert("Upload Failed", error.message);
