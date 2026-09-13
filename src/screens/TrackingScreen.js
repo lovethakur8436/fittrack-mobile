@@ -23,6 +23,7 @@ export default function TrackingScreen({ navigation }) {
     const locationSubscription = useRef(null);
     const timerInterval = useRef(null);
     const lastPointRef = useRef(null); // Used for accurate distance math
+    const durationRef = useRef(0);
 
     // 1. Initial Setup: Request permissions and get starting location
     useEffect(() => {
@@ -54,38 +55,42 @@ export default function TrackingScreen({ navigation }) {
     };
 
     // 3. Start Recording
-    const startTracking = async () => {
-        const now = new Date();
-        setStartTime(now);
-        setRoutePoints([]);
-        setDistanceMeters(0);
-        setDurationSeconds(0);
-        lastPointRef.current = null;
+    const startTracking = async (isResume = false) => {
+        if (!isResume) {
+            setStartTime(new Date());
+            setRoutePoints([]);
+            setDistanceMeters(0);
+            setDurationSeconds(0);
+            durationRef.current = 0;
+            lastPointRef.current = null;
+        }
+
         setIsTracking(true);
 
         // Start Stopwatch
         timerInterval.current = setInterval(() => {
-            setDurationSeconds(prev => prev + 1);
+            setDurationSeconds(prev => {
+                durationRef.current = prev + 1;
+                return prev + 1;
+            });
         }, 1000);
 
         // Start GPS Subscription
         locationSubscription.current = await Location.watchPositionAsync(
             {
                 accuracy: Location.Accuracy.High,
-                timeInterval: 3000, // Get update every 3 seconds
-                distanceInterval: 3, // Or every 3 meters
+                timeInterval: 3000,
+                distanceInterval: 3,
             },
             (location) => {
                 const newPoint = location.coords;
                 setCurrentLocation(newPoint);
 
-                // Calculate elapsed time for the payload
-                const elapsedSeconds = Math.floor((new Date() - now) / 1000);
-
+                // Use the ref for the exact relative time, even after pausing
                 const formattedPoint = {
                     lat: newPoint.latitude,
                     lng: newPoint.longitude,
-                    time: elapsedSeconds
+                    time: durationRef.current
                 };
 
                 setRoutePoints(prev => [...prev, formattedPoint]);
@@ -212,7 +217,7 @@ export default function TrackingScreen({ navigation }) {
             {/* Action Buttons */}
             <View style={styles.actionArea}>
                 {!isTracking && durationSeconds === 0 && (
-                    <TouchableOpacity style={styles.startButton} onPress={startTracking}>
+                    <TouchableOpacity style={styles.startButton} onPress={() => startTracking(false)}>
                         <Text style={styles.buttonText}>START</Text>
                     </TouchableOpacity>
                 )}
@@ -225,7 +230,7 @@ export default function TrackingScreen({ navigation }) {
 
                 {!isTracking && durationSeconds > 0 && (
                     <View style={styles.saveContainer}>
-                        <TouchableOpacity style={styles.resumeButton} onPress={startTracking}>
+                        <TouchableOpacity style={styles.resumeButton} onPress={() => startTracking(true)}>
                             <Text style={styles.buttonText}>RESUME</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.saveButton} onPress={handleFinish} disabled={isSaving}>
