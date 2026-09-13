@@ -72,7 +72,7 @@ export default function FeedScreen() {
     const fixImageUri = (url) => {
         if (!url) return null;
         if (Platform.OS === 'android' && url.includes('localhost')) {
-            return url.replace('localhost', '192.168.0.4');
+            return url.replace('localhost', '192.168.0.5');
         }
         return url;
     };
