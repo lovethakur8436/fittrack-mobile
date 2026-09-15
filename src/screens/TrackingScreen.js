@@ -4,36 +4,32 @@ import MapView, { Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { AuthContext } from '../context/AuthContext';
 import { ApiService } from '../services/api';
-import { useNavigation } from '@react-navigation/native';
-
 
 export default function TrackingScreen({ navigation }) {
-    const { token } = useContext(AuthContext);
+    // 1. Destructure refreshProfile from Context
+    const { token, refreshProfile } = useContext(AuthContext);
 
-    // UI State
     const [isTracking, setIsTracking] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [currentLocation, setCurrentLocation] = useState(null);
 
-    // Tracking Data State
-    const [routePoints, setRoutePoints] = useState([]);
+    // Segmented Route Tracking
+    // Instead of one flat array, we store an array of arrays. 
+    // Every time the user hits "Resume", we start a new array (segment).
+    const [routeSegments, setRouteSegments] = useState([[]]); 
     const [distanceMeters, setDistanceMeters] = useState(0);
     const [durationSeconds, setDurationSeconds] = useState(0);
     const [startTime, setStartTime] = useState(null);
 
-    // Refs for intervals and subscriptions
     const locationSubscription = useRef(null);
     const timerInterval = useRef(null);
-    const lastPointRef = useRef(null); // Used for accurate distance math
+    
+    const lastPointRef = useRef(null); 
+    const distanceRef = useRef(0);
     const durationRef = useRef(0);
-
-
-    // 1. Initial Setup: Request permissions and get starting location
-
 
     useEffect(() => {
         let isMounted = true;
-
         (async () => {
             try {
                 const { status } = await Location.requestForegroundPermissionsAsync();
@@ -41,24 +37,10 @@ export default function TrackingScreen({ navigation }) {
                     if (isMounted) Alert.alert('Permission Denied', 'Allow location access to record activities.');
                     return;
                 }
-
-                // Production-standard request
-                const location = await Location.getCurrentPositionAsync({ 
-                    accuracy: Location.Accuracy.Balanced
-                });
-                
-                if (isMounted) {
-                    setCurrentLocation(location.coords);
-                }
-
+                const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                if (isMounted) setCurrentLocation(location.coords);
             } catch (error) {
-                // Proper UI error handling, no hidden fallbacks
-                if (isMounted) {
-                    Alert.alert(
-                        "GPS Signal Lost", 
-                        "Could not acquire your current location. Please ensure your GPS is on and try again."
-                    );
-                }
+                if (isMounted) Alert.alert("GPS Error", "Could not acquire starting location.");
             }
         })();
 
@@ -68,9 +50,8 @@ export default function TrackingScreen({ navigation }) {
         };
     }, []);
 
-    // 2. Haversine Formula (Calculates distance between two GPS coordinates)
     const calculateDistance = (lat1, lon1, lat2, lon2) => {
-        const R = 6371e3; // Earth radius in meters
+        const R = 6371e3; 
         const toRadians = (deg) => deg * (Math.PI / 180);
         const dLat = toRadians(lat2 - lat1);
         const dLon = toRadians(lon2 - lon1);
@@ -81,20 +62,25 @@ export default function TrackingScreen({ navigation }) {
         return R * c;
     };
 
-    // 3. Start Recording
     const startTracking = async (isResume = false) => {
         if (!isResume) {
             setStartTime(new Date());
-            setRoutePoints([]);
+            setRouteSegments([[]]);
             setDistanceMeters(0);
             setDurationSeconds(0);
+            
+            distanceRef.current = 0;
             durationRef.current = 0;
-            lastPointRef.current = null;
+        } else {
+            // CRITICAL FIX: Add a new empty segment to the array when resuming.
+            // This prevents a straight line being drawn across the paused gap.
+            setRouteSegments(prev => [...prev, []]);
         }
 
+        // CRITICAL FIX: Reset last known point so the distance formula doesn't jump
+        lastPointRef.current = null;
         setIsTracking(true);
 
-        // Start Stopwatch
         timerInterval.current = setInterval(() => {
             setDurationSeconds(prev => {
                 durationRef.current = prev + 1;
@@ -102,7 +88,6 @@ export default function TrackingScreen({ navigation }) {
             });
         }, 1000);
 
-        // Start GPS Subscription
         locationSubscription.current = await Location.watchPositionAsync(
             {
                 accuracy: Location.Accuracy.High,
@@ -113,30 +98,35 @@ export default function TrackingScreen({ navigation }) {
                 const newPoint = location.coords;
                 setCurrentLocation(newPoint);
 
-                // Use the ref for the exact relative time, even after pausing
                 const formattedPoint = {
                     lat: newPoint.latitude,
                     lng: newPoint.longitude,
                     time: durationRef.current
                 };
 
-                setRoutePoints(prev => [...prev, formattedPoint]);
+                // Add point to the *latest* segment
+                setRouteSegments(prev => {
+                    const newSegments = [...prev];
+                    const lastIndex = newSegments.length - 1;
+                    newSegments[lastIndex] = [...newSegments[lastIndex], formattedPoint];
+                    return newSegments;
+                });
 
-                // Calculate Distance
                 if (lastPointRef.current) {
                     const addedDistance = calculateDistance(
                         lastPointRef.current.lat, lastPointRef.current.lng,
                         formattedPoint.lat, formattedPoint.lng
                     );
-                    setDistanceMeters(prev => prev + addedDistance);
+                    
+                    distanceRef.current += addedDistance;
+                    setDistanceMeters(distanceRef.current);
                 }
                 lastPointRef.current = formattedPoint;
             }
         );
     };
 
-    // 4. Stop Recording & Save
-    const stopTracking = async () => {
+    const stopTracking = () => {
         setIsTracking(false);
         if (timerInterval.current) clearInterval(timerInterval.current);
         if (locationSubscription.current) {
@@ -146,43 +136,51 @@ export default function TrackingScreen({ navigation }) {
     };
 
     const handleFinish = async () => {
-        await stopTracking();
+        stopTracking();
 
-        if (distanceMeters < 50) {
+        // Use the ref for absolute accuracy against batching delays
+        if (distanceRef.current < 50) {
             Alert.alert("Activity Too Short", "You must travel at least 50 meters to save an activity.");
             return;
         }
 
         setIsSaving(true);
+        
+        // Flatten the segments back into a single array for the backend API
+        const flatRouteData = routeSegments.flat();
 
-        // Construct exact JSON payload for backend
         const payload = {
-            title: "Afternoon Run", // You can prompt the user for this later
+            title: "Afternoon Run", 
             activityType: "RUN",
-            startTime: startTime.toISOString().split('.')[0], // Format: YYYY-MM-DDTHH:MM:SS
-            distanceMeters: parseFloat(distanceMeters.toFixed(2)),
-            durationSeconds: durationSeconds,
-            routeData: routePoints
+            startTime: startTime.toISOString().split('.')[0], 
+            distanceMeters: parseFloat(distanceRef.current.toFixed(2)),
+            durationSeconds: durationRef.current,
+            routeData: flatRouteData
         };
 
         try {
             await ApiService.createActivity(token, payload);
+            
+            // CRITICAL FIX: Force the profile to refresh in the background BEFORE we navigate
+            if (refreshProfile) {
+                await refreshProfile();
+            }
+
             Alert.alert("Success", "Activity saved!", [
                 { 
                     text: "OK", 
                     onPress: () => {
-                        // 1. Wipe all local state
+                        // Reset everything to ZERO
                         setDurationSeconds(0);
                         setDistanceMeters(0);
-                        setRoutePoints([]);
+                        setRouteSegments([[]]);
                         setStartTime(null);
-                        
-                        // 2. Reset the background refs
+                        distanceRef.current = 0;
                         durationRef.current = 0;
                         lastPointRef.current = null;
                         
-                        // 3. Navigate away
-                        navigation.navigate('Feed');
+                        // Navigate to the Dashboard (You) tab to see the updated totals immediately
+                        navigation.navigate('You');
                     } 
                 }
             ]);
@@ -193,7 +191,6 @@ export default function TrackingScreen({ navigation }) {
         }
     };
 
-    // Formatting Helpers
     const formatTime = (seconds) => {
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
@@ -211,7 +208,6 @@ export default function TrackingScreen({ navigation }) {
 
     return (
         <View style={styles.container}>
-            {/* Top Metrics Panel */}
             <View style={styles.metricsPanel}>
                 <View style={styles.metricGroup}>
                     <Text style={styles.metricLabel}>TIME</Text>
@@ -227,7 +223,6 @@ export default function TrackingScreen({ navigation }) {
                 </View>
             </View>
 
-            {/* Live Map */}
             <View style={styles.mapContainer}>
                 {currentLocation ? (
                     <MapView
@@ -241,13 +236,17 @@ export default function TrackingScreen({ navigation }) {
                             longitudeDelta: 0.01,
                         }}
                     >
-                        {routePoints.length > 0 && (
-                            <Polyline
-                                coordinates={routePoints.map(p => ({ latitude: Number(p.lat), longitude: Number(p.lng) }))}
-                                strokeColor="#fc4c02"
-                                strokeWidth={5}
-                            />
-                        )}
+                        {/* Map over each segment and draw an independent polyline to prevent straight lines cutting across paused areas */}
+                        {routeSegments.map((segment, index) => (
+                            segment.length > 0 && (
+                                <Polyline
+                                    key={index}
+                                    coordinates={segment.map(p => ({ latitude: Number(p.lat), longitude: Number(p.lng) }))}
+                                    strokeColor="#fc4c02"
+                                    strokeWidth={5}
+                                />
+                            )
+                        ))}
                     </MapView>
                 ) : (
                     <View style={styles.loadingMap}>
@@ -257,7 +256,6 @@ export default function TrackingScreen({ navigation }) {
                 )}
             </View>
 
-            {/* Action Buttons */}
             <View style={styles.actionArea}>
                 {!isTracking && durationSeconds === 0 && (
                     <TouchableOpacity style={styles.startButton} onPress={() => startTracking(false)}>
@@ -288,17 +286,14 @@ export default function TrackingScreen({ navigation }) {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#0f172a' },
-
     metricsPanel: { flexDirection: 'row', justifyContent: 'space-between', padding: 25, paddingTop: 60, backgroundColor: '#1e293b', borderBottomWidth: 1, borderBottomColor: '#334155' },
     metricGroup: { alignItems: 'center' },
     metricLabel: { color: '#94a3b8', fontSize: 12, fontWeight: '700', marginBottom: 5, letterSpacing: 1 },
     metricValue: { color: '#f8fafc', fontSize: 28, fontWeight: '900' },
-
     mapContainer: { flex: 1, alignSelf: 'stretch' },
     map: { flex: 1, alignSelf: 'stretch' },
     loadingMap: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
     loadingText: { color: '#94a3b8', marginTop: 10, fontWeight: '600' },
-
     actionArea: { padding: 30, backgroundColor: '#1e293b', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#334155' },
     startButton: { backgroundColor: '#fc4c02', width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', elevation: 5 },
     stopButton: { backgroundColor: '#ef4444', width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', elevation: 5 },
